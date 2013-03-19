@@ -7,6 +7,9 @@ own applications.
 This class is a wrapper around the custom [URL scheme](http://developer.izettle.com) iZettle is offering and makes it easy to 
 add iZettle Payments to your own app.
 
+It has not been tested in real life yet. I was only able to test if the URL callbacks work. Once I tested thze code with a 
+complete payment I can somehow guarantee you that it really works.
+
 **This is not an official repository from iZettle!**
 
 ## Setup
@@ -35,3 +38,68 @@ cancelled by the user. The wrapper class will then check the URL to determine if
     return [[iZettle instance] handleOpenURL:url];
 }
 ```
+
+Now that we have setup everything, we'll request a payment through the iZettle App. Open the header file of your view controller
+and import `iZettle.h` just like in the app delegate.
+
+The wrapper uses the `NSNoticiationCenter` class to notify all observers that a payment is either successfull or failed. 
+First of all we have to add our view controller as an observer for the two notifications the iZettle wrapper is using. 
+A good place to do this is the `viewWillAppear:` method.
+
+```objc
+- (void) viewWillAppear:(BOOL)animated
+{
+    [super viewWillAppear:animated];
+    
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(paymentComplete:) name:kZettlePaymentSuccessNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(paymentFailed:) name:kZettlePaymentFailedNotification object:nil];   
+}
+```
+
+Addionally we will unsubscribe from the notifications in the `viewWillDissapear:` method as we no longer need to be notified
+about payments in that case.
+
+```objc
+- (void) viewWillDisappear:(BOOL)animated
+{
+    [super viewWillDisappear:animated];
+    
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:kZettlePaymentSuccessNotification object:nil];
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:kZettlePaymentFailedNotification object:nil];
+}
+```
+
+No we need to implement the `paymentComplete:` and `paymentFailed:` method to handle the completion of the payment process.
+
+```objc
+- (void) paymentComplete:(NSNotification *)notification
+{
+    UIAlertView *paymentCompleteAlert = [[UIAlertView alloc] initWithTitle:@"Payment complete" message:@"The payment has been processed successfully by iZettle. Thank you!" delegate:nil cancelButtonTitle:nil otherButtonTitles:@"Close", nil];
+    [paymentCompleteAlert show];
+}
+
+- (void) paymentFailed:(NSNotification *)notification
+{
+    NSString *reason = @"The payment was cancelled.";
+    if (notification.object != nil) {
+        reason = [notification.object objectForKey:@"failureReason"];
+    }
+    
+    UIAlertView *paymentFailedAlert = [[UIAlertView alloc] initWithTitle:@"Payment failed" message:[NSString stringWithFormat:@"The payment could not be processed. Reason: %@", reason] delegate:nil cancelButtonTitle:nil otherButtonTitles:@"Close", nil];
+    [paymentFailedAlert show];
+}
+```
+
+No that we're all set, we can request a payment. You can do this by simply calling `requestPaymentForItem:price:currency:image:` method of the iZettle wrapper.
+The `image` parameter is optional. It can be used to display an image in the iZettle App (photo of the item being sold for example).
+
+```objc
+[[iZettle instance] requestPaymentForItem:@"Flowers" price:@"12.46" currency:@"EUR" image:nil];
+```
+
+After this method has been called, the iZettle App should open (otherwise an error will be displayed saying that the iZettle App is not installed)
+and prompt the user to pay for the product. If the user hits cancel or completes the purchase, iZettle will call our custom
+URL scheme to notify your app about the status of the payment.
+
+## License
+This code is licensed under my very own and special "Do whatever you want with it" license.
